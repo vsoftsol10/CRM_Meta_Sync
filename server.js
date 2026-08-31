@@ -262,6 +262,7 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 
   const body = req.body;
+  console.log('Webhook POST received:', JSON.stringify(body, null, 2));
 
   try {
     if (body.object === 'page') {
@@ -281,7 +282,10 @@ app.post('/webhook', async (req, res) => {
 async function handleMessenger(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
-      if (!event.message || event.message.is_echo) continue; // skip echoes of our own replies
+      if (!event.message || event.message.is_echo) {
+        console.log('Skipping Facebook event without inbound message.');
+        continue;
+      } // skip echoes of our own replies
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
@@ -294,6 +298,7 @@ async function handleMessenger(body) {
       });
 
       await saveMessage({ leadId: lead.id, channel: 'Facebook', channelUserId: senderId, direction: 'in', text });
+      console.log(`Facebook lead saved: ${lead.id}`);
     }
   }
 }
@@ -301,7 +306,10 @@ async function handleMessenger(body) {
 async function handleInstagram(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
-      if (!event.message || event.message.is_echo) continue;
+      if (!event.message || event.message.is_echo) {
+        console.log('Skipping Instagram event without inbound message.');
+        continue;
+      }
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
@@ -314,6 +322,7 @@ async function handleInstagram(body) {
       });
 
       await saveMessage({ leadId: lead.id, channel: 'Instagram', channelUserId: senderId, direction: 'in', text });
+      console.log(`Instagram lead saved: ${lead.id}`);
     }
   }
 }
@@ -338,6 +347,7 @@ async function handleWhatsApp(body) {
         });
 
         await saveMessage({ leadId: lead.id, channel: 'WhatsApp', channelUserId: from, direction: 'in', text });
+        console.log(`WhatsApp lead saved: ${lead.id}`);
       }
     }
   }
