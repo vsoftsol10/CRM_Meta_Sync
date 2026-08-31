@@ -1,0 +1,15 @@
+{
+  "name": "meta-webhook-crm-forwarder",
+  "version": "1.0.0",
+  "description": "Standalone Meta webhook service for forwarding WhatsApp, Facebook Messenger, and Instagram messages as CRM leads.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.20.0",
+    "body-parser": "^1.20.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.22.2"
+  }
+}
