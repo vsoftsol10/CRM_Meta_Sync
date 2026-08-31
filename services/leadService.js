@@ -9,6 +9,13 @@ const CRM_URL = 'https://vconstech-crm-new.onrender.com/api/leads';
 // (SQLite/Postgres) before this goes to production on the VPS.
 const seen = new Map(); // key: `${channel}:${channelUserId}` -> lead object returned by CRM
 
+function createLocalLead(payload) {
+  return {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ...payload,
+  };
+}
+
 function stripCountryCode(phoneRaw) {
   // WhatsApp sends the full E.164 number without '+', e.g. "919876543210".
   // The CRM wants exactly 10 digits, no country code. This assumes Indian
@@ -33,7 +40,15 @@ async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) 
     date: new Date().toISOString().split('T')[0],
   };
 
-  const { data: lead } = await axios.post(CRM_URL, payload);
+  let lead = createLocalLead(payload);
+
+  try {
+    const { data } = await axios.post(CRM_URL, payload);
+    lead = { ...lead, ...data };
+  } catch (error) {
+    console.error('CRM lead forwarding failed:', error.response?.data || error.message);
+  }
+
   seen.set(key, lead);
   return lead;
 }
