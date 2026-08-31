@@ -360,6 +360,25 @@ async function getMessengerProfile(psid, pageToken) {
 // ---------------------------------------------------------------------------
 app.get('/api/local-leads', (req, res) => res.json(listLeads()));
 
+app.get('/api/test-lead', async (req, res) => {
+  const lead = await findOrCreateLead({
+    channel: 'WhatsApp',
+    channelUserId: `test-${Date.now()}`,
+    fullName: 'Test Lead',
+    phoneRaw: '919999999999',
+  });
+
+  await saveMessage({
+    leadId: lead.id,
+    channel: 'WhatsApp',
+    channelUserId: lead.channelUserId || 'test-user',
+    direction: 'in',
+    text: 'Hi, I am interested',
+  });
+
+  res.json({ ok: true, lead });
+});
+
 app.get('/api/leads/:id/messages', async (req, res) => {
   res.json(await getMessages(req.params.id));
 });
