@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 // and lets you send a reply (POST /api/reply). Point API_BASE at wherever
 // server.js is running (localhost while testing, your Render/VPS URL once deployed).
 
-const API_BASE = 'https://lead-create.onrender.com';
+const API_BASE = 'https://crm-meta-sync.onrender.com';
 
 export default function LeadInbox() {
   const [leads, setLeads] = useState([]);
