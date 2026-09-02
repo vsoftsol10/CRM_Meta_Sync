@@ -282,7 +282,7 @@ app.post('/webhook', async (req, res) => {
       console.log('Unhandled webhook object type:', body.object);
     }
   } catch (err) {
-    console.error('Webhook processing error:', err.message);
+    console.error('Webhook processing error:', err.response?.data || err.message);
   }
 });
 

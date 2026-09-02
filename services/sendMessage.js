@@ -18,17 +18,24 @@ async function sendMessage({ channel, channelUserId, text }) {
     );
   }
 
-  if (channel === 'Facebook' || channel === 'Instagram') {
-    // Both ride the same Send API, using the Page access token (Instagram
-    // messaging is authenticated via the linked Facebook Page, not the IG
-    // account directly). Also enforces its own 24-hour standard messaging
-    // window, with a handful of tag-based exceptions.
+  if (channel === 'Facebook') {
     return axios.post(
       `https://graph.facebook.com/v20.0/me/messages`,
       {
         recipient: { id: channelUserId },
         message: { text },
         messaging_type: 'RESPONSE',
+      },
+      { params: { access_token: process.env.PAGE_ACCESS_TOKEN } }
+    );
+  }
+
+  if (channel === 'Instagram') {
+    return axios.post(
+      `https://graph.facebook.com/v20.0/me/messages`,
+      {
+        recipient: { id: channelUserId },
+        message: { text },
       },
       { params: { access_token: process.env.PAGE_ACCESS_TOKEN } }
     );
