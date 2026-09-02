@@ -225,14 +225,21 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const { findOrCreateLead, listLeads } = require('./services/leadService');
+const { createLead, findOrCreateLead, listLeads } = require('./services/leadService');
 const { sendMessage } = require('./services/sendMessage');
 const { saveMessage, getMessages } = require('./services/messageStore');
+const {
+  completeRegistration,
+  createRegistration,
+  getRegistration,
+} = require('./services/registrationStore');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://crm-meta-sync.onrender.com').replace(/\/$/, '');
 
 // ---------------------------------------------------------------------------
 // Webhook verification (GET) — Meta calls this once when you save the
@@ -279,6 +286,20 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+async function sendRegistrationLink({ channel, channelUserId, fullName, initialMessage }) {
+  const registration = createRegistration({
+    channel,
+    channelUserId,
+    fullName,
+    initialMessage,
+  });
+  const link = `${PUBLIC_BASE_URL}/register/${registration.token}`;
+  const text = `Thanks for messaging us. Please complete this registration form so our team can help you: ${link}`;
+
+  await sendMessage({ channel, channelUserId, text });
+  console.log(`${channel} registration link sent: ${link}`);
+}
+
 async function handleMessenger(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
@@ -291,14 +312,12 @@ async function handleMessenger(body) {
 
       const profile = await getMessengerProfile(senderId, process.env.PAGE_ACCESS_TOKEN);
 
-      const lead = await findOrCreateLead({
+      await sendRegistrationLink({
         channel: 'Facebook',
         channelUserId: senderId,
         fullName: profile.name || 'Unknown',
+        initialMessage: text,
       });
-
-      await saveMessage({ leadId: lead.id, channel: 'Facebook', channelUserId: senderId, direction: 'in', text });
-      console.log(`Facebook lead saved: ${lead.id}`);
     }
   }
 }
@@ -313,16 +332,14 @@ async function handleInstagram(body) {
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
-      const lead = await findOrCreateLead({
+      await sendRegistrationLink({
         channel: 'Instagram',
         channelUserId: senderId,
         // IG's Send API doesn't hand you a display name without extra
         // permissions/review — leaving it generic until you fetch it another way.
         fullName: 'Instagram User',
+        initialMessage: text,
       });
-
-      await saveMessage({ leadId: lead.id, channel: 'Instagram', channelUserId: senderId, direction: 'in', text });
-      console.log(`Instagram lead saved: ${lead.id}`);
     }
   }
 }
@@ -368,6 +385,123 @@ async function getMessengerProfile(psid, pageToken) {
 // Small API surface for the React inbox (not part of Meta's contract — these
 // are just endpoints on your own server).
 // ---------------------------------------------------------------------------
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function renderRegistrationForm(registration, error = '') {
+  const fullName = registration.fullName === 'Unknown' ? '' : registration.fullName;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lead Registration</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f6f7f9; color: #17202a; }
+    main { max-width: 560px; margin: 32px auto; padding: 24px; background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; }
+    h1 { margin: 0 0 20px; font-size: 24px; }
+    label { display: block; margin-top: 14px; font-weight: 700; }
+    input, textarea, select { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 11px; border: 1px solid #c9d1d9; border-radius: 6px; font-size: 15px; }
+    textarea { min-height: 92px; resize: vertical; }
+    button { margin-top: 20px; width: 100%; padding: 12px; border: 0; border-radius: 6px; background: #1769aa; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .error { padding: 10px 12px; margin-bottom: 16px; color: #8a1f11; background: #fff0ed; border: 1px solid #ffc9bf; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Registration Form</h1>
+    ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
+    <form method="post">
+      <label>Full name
+        <input name="fullName" value="${escapeHtml(fullName)}" required>
+      </label>
+      <label>Company
+        <input name="company" required>
+      </label>
+      <label>Mobile number
+        <input name="phone" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required>
+      </label>
+      <label>Email
+        <input name="email" type="email" required>
+      </label>
+      <label>Plan
+        <select name="plan">
+          <option value="Unassigned">Unassigned</option>
+          <option value="Trial">Trial</option>
+          <option value="Free">Free</option>
+          <option value="Paid">Paid</option>
+        </select>
+      </label>
+      <label>Requirements
+        <textarea name="requirements" placeholder="Tell us what you need"></textarea>
+      </label>
+      <button type="submit">Submit</button>
+    </form>
+  </main>
+</body>
+</html>`;
+}
+
+app.get('/register/:token', (req, res) => {
+  const registration = getRegistration(req.params.token);
+
+  if (!registration) {
+    return res.status(404).send('Registration link not found.');
+  }
+
+  if (registration.status === 'completed') {
+    return res.send('Registration already submitted. Thank you.');
+  }
+
+  return res.type('html').send(renderRegistrationForm(registration));
+});
+
+app.post('/register/:token', async (req, res) => {
+  const registration = getRegistration(req.params.token);
+
+  if (!registration) {
+    return res.status(404).send('Registration link not found.');
+  }
+
+  if (registration.status === 'completed') {
+    return res.send('Registration already submitted. Thank you.');
+  }
+
+  const phone = String(req.body.phone || '').replace(/\D/g, '');
+  if (phone.length !== 10) {
+    return res.status(400).type('html').send(renderRegistrationForm(registration, 'Enter a valid 10-digit mobile number.'));
+  }
+
+  const lead = await createLead({
+    channel: registration.channel,
+    channelUserId: registration.channelUserId,
+    fullName: req.body.fullName,
+    company: req.body.company,
+    phone,
+    email: req.body.email,
+    plan: req.body.plan,
+    requirements: req.body.requirements,
+  });
+
+  await saveMessage({
+    leadId: lead.id,
+    channel: registration.channel,
+    channelUserId: registration.channelUserId,
+    direction: 'in',
+    text: registration.initialMessage || '',
+  });
+
+  completeRegistration(req.params.token, lead);
+  return res.send('Thank you. Your registration has been submitted.');
+});
+
 app.get('/api/local-leads', (req, res) => res.json(listLeads()));
 
 app.get('/api/leads/:id/messages', async (req, res) => {

@@ -1,13 +1,8 @@
 const axios = require('axios');
 
-const CRM_URL = 'https://vconstech-crm-new.onrender.com/api/leads';
+const CRM_URL = process.env.CRM_API_URL || 'https://vconstech-crm-new.onrender.com/api/leads';
 
-// We haven't confirmed the CRM has a "find by channel + channelUserId" GET
-// endpoint — only POST /api/leads is confirmed working. So this keeps an
-// in-memory map to avoid creating a duplicate lead every time the same
-// person messages again. It resets on server restart; swap for a real table
-// (SQLite/Postgres) before this goes to production on the VPS.
-const seen = new Map(); // key: `${channel}:${channelUserId}` -> lead object returned by CRM
+const seen = new Map();
 
 function createLocalLead(payload) {
   return {
@@ -17,10 +12,6 @@ function createLocalLead(payload) {
 }
 
 function stripCountryCode(phoneRaw) {
-  // WhatsApp sends the full E.164 number without '+', e.g. "919876543210".
-  // The CRM wants exactly 10 digits, no country code. This assumes Indian
-  // numbers (91 + 10 digits) — adjust the slice logic if you get senders
-  // from other countries.
   const digits = (phoneRaw || '').replace(/\D/g, '');
   return digits.length > 10 ? digits.slice(-10) : digits;
 }
@@ -41,20 +32,32 @@ function createPlaceholderPhone(channelUserId) {
   return `9${String(hash).padStart(9, '0')}`;
 }
 
-async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) {
+async function createLead({
+  channel,
+  channelUserId,
+  fullName,
+  company,
+  phone,
+  phoneRaw,
+  email,
+  plan,
+  requirements,
+}) {
   const key = `${channel}:${channelUserId}`;
-  if (seen.has(key)) return seen.get(key);
-
   const payload = {
     fullName: fullName || 'Unknown',
-    company: 'N/A', // Meta never gives you a company name — capture it later in conversation if needed
-    phone: phoneRaw ? stripCountryCode(phoneRaw) : createPlaceholderPhone(channelUserId), // Messenger/Instagram don't expose phone numbers at all
-    email: `${channelUserId}@${channel.toLowerCase()}.lead`, // placeholder — Meta doesn't expose email either
+    company: company || 'N/A',
+    phone: phone || (phoneRaw ? stripCountryCode(phoneRaw) : createPlaceholderPhone(channelUserId)),
+    email: email || `${channelUserId}@${channel.toLowerCase()}.lead`,
     status: 'New',
-    plan: 'Unassigned',
+    plan: plan || 'Unassigned',
     channel,
     date: new Date().toISOString().split('T')[0],
   };
+
+  if (requirements) {
+    payload.requirements = requirements;
+  }
 
   let lead = createLocalLead(payload);
 
@@ -69,8 +72,15 @@ async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) 
   return lead;
 }
 
+async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) {
+  const key = `${channel}:${channelUserId}`;
+  if (seen.has(key)) return seen.get(key);
+
+  return createLead({ channel, channelUserId, fullName, phoneRaw });
+}
+
 function listLeads() {
   return Array.from(seen.values());
 }
 
-module.exports = { findOrCreateLead, listLeads };
+module.exports = { createLead, findOrCreateLead, listLeads };

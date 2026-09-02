@@ -43,5 +43,14 @@
       "text": "Facebook CRM acceptance test with generated phone",
       "at": "2026-09-02T06:25:41.486Z"
     }
+  ],
+  "local-1788347554198-jebzme": [
+    {
+      "channel": "Facebook",
+      "channelUserId": "FORM_TEST_FB_001",
+      "direction": "in",
+      "text": "Interested in ERP",
+      "at": "2026-09-02T11:12:37.580Z"
+    }
   ]
 }
