@@ -25,6 +25,22 @@ function stripCountryCode(phoneRaw) {
   return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
+function createPlaceholderPhone(channelUserId) {
+  const source = String(channelUserId || '0');
+  const numeric = source.replace(/\D/g, '');
+
+  if (numeric.length >= 9) {
+    return `9${numeric.slice(-9)}`;
+  }
+
+  let hash = 0;
+  for (const char of source) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 1000000000;
+  }
+
+  return `9${String(hash).padStart(9, '0')}`;
+}
+
 async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) {
   const key = `${channel}:${channelUserId}`;
   if (seen.has(key)) return seen.get(key);
@@ -32,7 +48,7 @@ async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) 
   const payload = {
     fullName: fullName || 'Unknown',
     company: 'N/A', // Meta never gives you a company name — capture it later in conversation if needed
-    phone: phoneRaw ? stripCountryCode(phoneRaw) : '0000000000', // Messenger/Instagram don't expose phone numbers at all
+    phone: phoneRaw ? stripCountryCode(phoneRaw) : createPlaceholderPhone(channelUserId), // Messenger/Instagram don't expose phone numbers at all
     email: `${channelUserId}@${channel.toLowerCase()}.lead`, // placeholder — Meta doesn't expose email either
     status: 'New',
     plan: 'Unassigned',

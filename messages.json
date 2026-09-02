@@ -1,0 +1,47 @@
+{
+  "local-1788263705470-gbqzen": [
+    {
+      "channel": "WhatsApp",
+      "channelUserId": "919876543210",
+      "direction": "in",
+      "text": "Hi, interested in your service",
+      "at": "2026-09-01T11:55:08.828Z"
+    }
+  ],
+  "local-1788329026390-axof9p": [
+    {
+      "channel": "Facebook",
+      "channelUserId": "TEST_FACEBOOK_USER_001",
+      "direction": "in",
+      "text": "Test Facebook message from local simulation",
+      "at": "2026-09-02T06:03:47.179Z"
+    }
+  ],
+  "local-1788329350189-v5w575": [
+    {
+      "channel": "Facebook",
+      "channelUserId": "TEST_FACEBOOK_USER_002",
+      "direction": "in",
+      "text": "Second Facebook test after phone fix",
+      "at": "2026-09-02T06:09:12.344Z"
+    }
+  ],
+  "local-1788330293766-v14hju": [
+    {
+      "channel": "Facebook",
+      "channelUserId": "REAL_RENDER_FB_TEST_ABC_003",
+      "direction": "in",
+      "text": "Facebook test with generated placeholder phone",
+      "at": "2026-09-02T06:24:53.817Z"
+    }
+  ],
+  "local-1788330339711-i783zs": [
+    {
+      "channel": "Facebook",
+      "channelUserId": "REAL_RENDER_FB_TEST_ABC_004",
+      "direction": "in",
+      "text": "Facebook CRM acceptance test with generated phone",
+      "at": "2026-09-02T06:25:41.486Z"
+    }
+  ]
+}
