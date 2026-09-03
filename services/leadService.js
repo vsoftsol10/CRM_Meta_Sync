@@ -1,6 +1,7 @@
 const axios = require('axios');
 
 const CRM_URL = process.env.CRM_API_URL || 'https://vconstech-crm-new.onrender.com/api/leads';
+const CRM_MAX_ATTEMPTS = 3;
 
 const seen = new Map();
 
@@ -30,6 +31,41 @@ function createPlaceholderPhone(channelUserId) {
   }
 
   return `9${String(hash).padStart(9, '0')}`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelay(error, attempt) {
+  const retryAfter = error.response?.headers?.['retry-after'];
+  const retryAfterSeconds = Number(retryAfter);
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  return attempt * 1000;
+}
+
+async function postLeadToCrm(payload) {
+  for (let attempt = 1; attempt <= CRM_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const { data } = await axios.post(CRM_URL, payload);
+      return data;
+    } catch (error) {
+      const status = error.response?.status;
+      const shouldRetry = status === 429 && attempt < CRM_MAX_ATTEMPTS;
+
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      const delay = getRetryDelay(error, attempt);
+      console.warn(`CRM rate limit hit. Retrying lead forwarding in ${delay}ms.`);
+      await wait(delay);
+    }
+  }
 }
 
 async function createLead({
@@ -62,10 +98,10 @@ async function createLead({
   let lead = createLocalLead(payload);
 
   try {
-    const { data } = await axios.post(CRM_URL, payload);
+    const data = await postLeadToCrm(payload);
     lead = { ...lead, ...data };
   } catch (error) {
-    console.error('CRM lead forwarding failed:', error.response?.data || error.message);
+    console.error('CRM lead forwarding failed:', error.response?.status || '', error.response?.data || error.message);
   }
 
   seen.set(key, lead);
