@@ -303,10 +303,16 @@ async function sendRegistrationLink({ channel, channelUserId, fullName, initialM
 async function handleMessenger(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
-      if (!event.message || event.message.is_echo) {
+      if (event.message?.is_echo) {
+        console.log('Skipping Facebook echo of our own outbound message.');
+        continue;
+      }
+
+      if (!event.message) {
         console.log('Skipping Facebook event without inbound message.');
         continue;
-      } // skip echoes of our own replies
+      }
+
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
@@ -325,10 +331,16 @@ async function handleMessenger(body) {
 async function handleInstagram(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
-      if (!event.message || event.message.is_echo) {
+      if (event.message?.is_echo) {
+        console.log('Skipping Instagram echo of our own outbound message.');
+        continue;
+      }
+
+      if (!event.message) {
         console.log('Skipping Instagram event without inbound message.');
         continue;
       }
+
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
