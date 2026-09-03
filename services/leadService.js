@@ -49,11 +49,13 @@ function getRetryDelay(error, failedAttempt) {
 }
 
 async function forwardLeadToCrm(payload, lead) {
+  console.log(`Forwarding ${payload.channel} lead to remote CRM: ${lead.id}`);
+
   for (let attempt = 1; attempt <= CRM_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       const { data } = await axios.post(CRM_URL, payload);
       Object.assign(lead, data);
-      console.log(`CRM lead forwarded successfully: ${lead.id}`);
+      console.log(`Remote CRM accepted ${payload.channel} lead: ${lead.id}`);
       return;
     } catch (error) {
       const status = error.response?.status;
@@ -64,7 +66,7 @@ async function forwardLeadToCrm(payload, lead) {
       }
 
       const delay = getRetryDelay(error, attempt);
-      console.warn(`CRM rate limit hit. Retrying lead forwarding in ${delay}ms.`);
+      console.warn(`Remote CRM is rate-limiting this app. Retrying ${payload.channel} lead forwarding in ${delay}ms.`);
       await wait(delay);
     }
   }
@@ -101,7 +103,7 @@ async function createLead({
   seen.set(key, lead);
 
   forwardLeadToCrm(payload, lead).catch((error) => {
-    console.error('CRM lead forwarding failed:', error.response?.status || '', error.response?.data || error.message);
+    console.error(`Remote CRM lead forwarding failed for ${payload.channel}:`, error.response?.status || '', error.response?.data || error.message);
   });
 
   return lead;
