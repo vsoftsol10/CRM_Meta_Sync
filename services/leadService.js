@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const CRM_URL = process.env.CRM_API_URL || 'https://vconstech-crm-new.onrender.com/api/leads';
-const CRM_MAX_ATTEMPTS = 3;
+const CRM_RETRY_DELAYS_MS = [0, 15000, 60000, 180000, 300000];
 
 const seen = new Map();
 
@@ -37,7 +37,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getRetryDelay(error, attempt) {
+function getRetryDelay(error, failedAttempt) {
   const retryAfter = error.response?.headers?.['retry-after'];
   const retryAfterSeconds = Number(retryAfter);
 
@@ -45,17 +45,19 @@ function getRetryDelay(error, attempt) {
     return retryAfterSeconds * 1000;
   }
 
-  return attempt * 1000;
+  return CRM_RETRY_DELAYS_MS[failedAttempt] || CRM_RETRY_DELAYS_MS[CRM_RETRY_DELAYS_MS.length - 1];
 }
 
-async function postLeadToCrm(payload) {
-  for (let attempt = 1; attempt <= CRM_MAX_ATTEMPTS; attempt += 1) {
+async function forwardLeadToCrm(payload, lead) {
+  for (let attempt = 1; attempt <= CRM_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       const { data } = await axios.post(CRM_URL, payload);
-      return data;
+      Object.assign(lead, data);
+      console.log(`CRM lead forwarded successfully: ${lead.id}`);
+      return;
     } catch (error) {
       const status = error.response?.status;
-      const shouldRetry = status === 429 && attempt < CRM_MAX_ATTEMPTS;
+      const shouldRetry = status === 429 && attempt < CRM_RETRY_DELAYS_MS.length;
 
       if (!shouldRetry) {
         throw error;
@@ -96,15 +98,12 @@ async function createLead({
   }
 
   let lead = createLocalLead(payload);
-
-  try {
-    const data = await postLeadToCrm(payload);
-    lead = { ...lead, ...data };
-  } catch (error) {
-    console.error('CRM lead forwarding failed:', error.response?.status || '', error.response?.data || error.message);
-  }
-
   seen.set(key, lead);
+
+  forwardLeadToCrm(payload, lead).catch((error) => {
+    console.error('CRM lead forwarding failed:', error.response?.status || '', error.response?.data || error.message);
+  });
+
   return lead;
 }
 
