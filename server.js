@@ -431,19 +431,36 @@ function renderRegistrationForm(registration, error = '') {
       <label>Email
         <input name="email" type="email" required>
       </label>
-      <label>Plan
-        <select name="plan">
-          <option value="Unassigned">Unassigned</option>
-          <option value="Trial">Trial</option>
-          <option value="Free">Free</option>
-          <option value="Paid">Paid</option>
-        </select>
-      </label>
       <label>Requirements
         <textarea name="requirements" placeholder="Tell us what you need"></textarea>
       </label>
       <button type="submit">Submit</button>
     </form>
+  </main>
+</body>
+</html>`;
+}
+
+function renderRegistrationCompletePage({ alreadySubmitted = false } = {}) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registration Submitted</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Arial, sans-serif; background: #f6f7f9; color: #17202a; }
+    main { width: min(560px, calc(100% - 32px)); padding: 28px; box-sizing: border-box; background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; text-align: center; }
+    .icon { display: inline-grid; place-items: center; width: 56px; height: 56px; margin-bottom: 18px; border-radius: 50%; background: #e7f6ee; color: #168144; font-size: 30px; font-weight: 700; }
+    h1 { margin: 0; font-size: 25px; line-height: 1.25; }
+    p { margin: 12px 0 0; color: #52616f; font-size: 16px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="icon">✓</div>
+    <h1>${alreadySubmitted ? 'Registration already submitted' : 'Registration submitted'}</h1>
+    <p>${alreadySubmitted ? 'We already have your details. Our team will contact you soon.' : 'Thank you. We have received your details and our team will contact you soon.'}</p>
   </main>
 </body>
 </html>`;
@@ -457,7 +474,7 @@ app.get('/register/:token', (req, res) => {
   }
 
   if (registration.status === 'completed') {
-    return res.send('Registration already submitted. Thank you.');
+    return res.type('html').send(renderRegistrationCompletePage({ alreadySubmitted: true }));
   }
 
   return res.type('html').send(renderRegistrationForm(registration));
@@ -471,7 +488,7 @@ app.post('/register/:token', async (req, res) => {
   }
 
   if (registration.status === 'completed') {
-    return res.send('Registration already submitted. Thank you.');
+    return res.type('html').send(renderRegistrationCompletePage({ alreadySubmitted: true }));
   }
 
   const phone = String(req.body.phone || '').replace(/\D/g, '');
@@ -486,7 +503,7 @@ app.post('/register/:token', async (req, res) => {
     company: req.body.company,
     phone,
     email: req.body.email,
-    plan: req.body.plan,
+    plan: 'none',
     requirements: req.body.requirements,
   });
 
@@ -499,7 +516,7 @@ app.post('/register/:token', async (req, res) => {
   });
 
   completeRegistration(req.params.token, lead);
-  return res.send('Thank you. Your registration has been submitted.');
+  return res.type('html').send(renderRegistrationCompletePage());
 });
 
 app.get('/api/local-leads', (req, res) => res.json(listLeads()));
