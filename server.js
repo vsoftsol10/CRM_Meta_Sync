@@ -228,10 +228,12 @@ const axios = require('axios');
 const { createLead, findOrCreateLead, listLeads } = require('./services/leadService');
 const { sendMessage } = require('./services/sendMessage');
 const { saveMessage, getMessages } = require('./services/messageStore');
+const { generateSalesReply, fallbackReply } = require('./services/aiReply');
 const {
   completeRegistration,
   createRegistration,
   getRegistration,
+  getPendingRegistration,
 } = require('./services/registrationStore');
 
 const app = express();
@@ -287,6 +289,12 @@ app.post('/webhook', async (req, res) => {
 });
 
 async function sendRegistrationLink({ channel, channelUserId, fullName, initialMessage }) {
+  const existingRegistration = getPendingRegistration(channel, channelUserId);
+  if (existingRegistration) {
+    console.log(`${channel} registration link already sent for ${channelUserId}.`);
+    return existingRegistration;
+  }
+
   const registration = createRegistration({
     channel,
     channelUserId,
@@ -298,6 +306,39 @@ async function sendRegistrationLink({ channel, channelUserId, fullName, initialM
 
   await sendMessage({ channel, channelUserId, text });
   console.log(`${channel} registration link sent: ${link}`);
+  return registration;
+}
+
+async function handleInboundMessage({ channel, channelUserId, fullName, phoneRaw, text }) {
+  if (!text.trim()) {
+    console.log(`Skipping ${channel} inbound event without text.`);
+    return;
+  }
+
+  const lead = await findOrCreateLead({ channel, channelUserId, fullName, phoneRaw });
+  await saveMessage({ leadId: lead.id, channel, channelUserId, direction: 'in', text });
+
+  const messages = await getMessages(lead.id);
+  let aiReply;
+
+  try {
+    aiReply = await generateSalesReply(messages);
+  } catch (error) {
+    console.error('Groq auto-reply failed:', error.message);
+    aiReply = fallbackReply();
+  }
+
+  await sendMessage({ channel, channelUserId, text: aiReply.reply });
+  await saveMessage({ leadId: lead.id, channel, channelUserId, direction: 'out', text: aiReply.reply });
+
+  if (aiReply.wantsRegistration) {
+    await sendRegistrationLink({
+      channel,
+      channelUserId,
+      fullName,
+      initialMessage: text,
+    });
+  }
 }
 
 async function handleMessenger(body) {
@@ -318,11 +359,11 @@ async function handleMessenger(body) {
 
       const profile = await getMessengerProfile(senderId, process.env.PAGE_ACCESS_TOKEN);
 
-      await sendRegistrationLink({
+      await handleInboundMessage({
         channel: 'Facebook',
         channelUserId: senderId,
         fullName: profile.name || 'Unknown',
-        initialMessage: text,
+        text,
       });
     }
   }
@@ -344,13 +385,13 @@ async function handleInstagram(body) {
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
-      await sendRegistrationLink({
+      await handleInboundMessage({
         channel: 'Instagram',
         channelUserId: senderId,
         // IG's Send API doesn't hand you a display name without extra
         // permissions/review — leaving it generic until you fetch it another way.
         fullName: 'Instagram User',
-        initialMessage: text,
+        text,
       });
     }
   }
@@ -368,15 +409,13 @@ async function handleWhatsApp(body) {
         const contact = (value.contacts || [])[0];
         const name = contact ? contact.profile.name : 'Unknown';
 
-        const lead = await findOrCreateLead({
+        await handleInboundMessage({
           channel: 'WhatsApp',
           channelUserId: from,
           fullName: name,
           phoneRaw: from,
+          text,
         });
-
-        await saveMessage({ leadId: lead.id, channel: 'WhatsApp', channelUserId: from, direction: 'in', text });
-        console.log(`WhatsApp lead saved: ${lead.id}`);
       }
     }
   }

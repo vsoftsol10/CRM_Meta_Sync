@@ -32,6 +32,15 @@ function getRegistration(token) {
   return load()[token] || null;
 }
 
+function getPendingRegistration(channel, channelUserId) {
+  return Object.values(load()).find(
+    (registration) =>
+      registration.channel === channel &&
+      registration.channelUserId === channelUserId &&
+      registration.status === 'pending'
+  ) || null;
+}
+
 function completeRegistration(token, lead) {
   const data = load();
   if (!data[token]) return null;
@@ -47,4 +56,4 @@ function completeRegistration(token, lead) {
   return data[token];
 }
 
-module.exports = { createRegistration, getRegistration, completeRegistration };
+module.exports = { createRegistration, getRegistration, getPendingRegistration, completeRegistration };
