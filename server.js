@@ -242,6 +242,8 @@ app.use(express.urlencoded({ extended: false }));
 
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://crm-meta-sync.onrender.com').replace(/\/$/, '');
+const PROCESSED_MESSAGE_TTL_MS = 10 * 60 * 1000;
+const processedInboundMessages = new Map();
 
 // ---------------------------------------------------------------------------
 // Webhook verification (GET) — Meta calls this once when you save the
@@ -341,6 +343,21 @@ async function handleInboundMessage({ channel, channelUserId, fullName, phoneRaw
   }
 }
 
+function isDuplicateInboundMessage(messageId) {
+  if (!messageId) return false;
+
+  const now = Date.now();
+  for (const [id, receivedAt] of processedInboundMessages) {
+    if (now - receivedAt > PROCESSED_MESSAGE_TTL_MS) {
+      processedInboundMessages.delete(id);
+    }
+  }
+
+  if (processedInboundMessages.has(messageId)) return true;
+  processedInboundMessages.set(messageId, now);
+  return false;
+}
+
 async function handleMessenger(body) {
   for (const entry of body.entry || []) {
     for (const event of entry.messaging || []) {
@@ -356,6 +373,11 @@ async function handleMessenger(body) {
 
       const senderId = event.sender.id;
       const text = event.message.text || '';
+
+      if (isDuplicateInboundMessage(event.message.mid)) {
+        console.log('Skipping duplicate Facebook inbound message.');
+        continue;
+      }
 
       const profile = await getMessengerProfile(senderId, process.env.PAGE_ACCESS_TOKEN);
 
@@ -385,6 +407,11 @@ async function handleInstagram(body) {
       const senderId = event.sender.id;
       const text = event.message.text || '';
 
+      if (isDuplicateInboundMessage(event.message.mid)) {
+        console.log('Skipping duplicate Instagram inbound message.');
+        continue;
+      }
+
       await handleInboundMessage({
         channel: 'Instagram',
         channelUserId: senderId,
@@ -408,6 +435,11 @@ async function handleWhatsApp(body) {
         const text = msg.text ? msg.text.body : '';
         const contact = (value.contacts || [])[0];
         const name = contact ? contact.profile.name : 'Unknown';
+
+        if (isDuplicateInboundMessage(msg.id)) {
+          console.log('Skipping duplicate WhatsApp inbound message.');
+          continue;
+        }
 
         await handleInboundMessage({
           channel: 'WhatsApp',

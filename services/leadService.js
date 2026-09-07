@@ -84,20 +84,17 @@ async function createLead({
   requirements,
 }) {
   const key = `${channel}:${channelUserId}`;
-  const payload = {
-    fullName: fullName || 'Unknown',
-    company: company || 'N/A',
-    phone: phone || (phoneRaw ? stripCountryCode(phoneRaw) : createPlaceholderPhone(channelUserId)),
-    email: email || `${channelUserId}@${channel.toLowerCase()}.lead`,
-    status: 'New',
-    plan: plan || 'Unassigned',
+  const payload = buildLeadPayload({
     channel,
-    date: new Date().toISOString().split('T')[0],
-  };
-
-  if (requirements) {
-    payload.requirements = requirements;
-  }
+    channelUserId,
+    fullName,
+    company,
+    phone,
+    phoneRaw,
+    email,
+    plan,
+    requirements,
+  });
 
   let lead = createLocalLead(payload);
   seen.set(key, lead);
@@ -113,7 +110,40 @@ async function findOrCreateLead({ channel, channelUserId, fullName, phoneRaw }) 
   const key = `${channel}:${channelUserId}`;
   if (seen.has(key)) return seen.get(key);
 
-  return createLead({ channel, channelUserId, fullName, phoneRaw });
+  // Conversation records are local only. A CRM lead is created after the
+  // registration form is submitted, not for each qualifying chat message.
+  const lead = createLocalLead(buildLeadPayload({ channel, channelUserId, fullName, phoneRaw }));
+  seen.set(key, lead);
+  return lead;
+}
+
+function buildLeadPayload({
+  channel,
+  channelUserId,
+  fullName,
+  company,
+  phone,
+  phoneRaw,
+  email,
+  plan,
+  requirements,
+}) {
+  const payload = {
+    fullName: fullName || 'Unknown',
+    company: company || 'N/A',
+    phone: phone || (phoneRaw ? stripCountryCode(phoneRaw) : createPlaceholderPhone(channelUserId)),
+    email: email || `${channelUserId}@${channel.toLowerCase()}.lead`,
+    status: 'New',
+    plan: plan || 'Unassigned',
+    channel,
+    date: new Date().toISOString().split('T')[0],
+  };
+
+  if (requirements) {
+    payload.requirements = requirements;
+  }
+
+  return payload;
 }
 
 function listLeads() {
