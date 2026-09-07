@@ -325,7 +325,7 @@ async function handleInboundMessage({ channel, channelUserId, fullName, phoneRaw
     aiReply = await generateSalesReply(messages);
   } catch (error) {
     console.error('Groq auto-reply failed:', error.message);
-    aiReply = fallbackReply();
+    aiReply = fallbackReply(messages);
   }
 
   await sendMessage({ channel, channelUserId, text: aiReply.reply });
