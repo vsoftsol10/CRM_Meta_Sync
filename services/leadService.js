@@ -99,9 +99,13 @@ async function createLead({
   let lead = createLocalLead(payload);
   seen.set(key, lead);
 
-  forwardLeadToCrm(payload, lead).catch((error) => {
-    console.error(`Remote CRM lead forwarding failed for ${payload.channel}:`, error.response?.status || '', error.response?.data || error.message);
-  });
+  if (process.env.FORWARD_REGISTRATIONS_TO_CRM === 'true') {
+    forwardLeadToCrm(payload, lead).catch((error) => {
+      console.error(`Remote CRM lead forwarding failed for ${payload.channel}:`, error.response?.status || '', error.response?.data || error.message);
+    });
+  } else {
+    console.log(`${payload.channel} registration saved locally. CRM forwarding is disabled.`);
+  }
 
   return lead;
 }
